@@ -48,12 +48,12 @@ export const generateMockPayMatrix = () => {
 };
 
 // Find index in pay matrix for a specific basic pay
-export const findIndexForBasic = (payMatrix, level, basic) => {
-  if (!payMatrix[level]) return 1;
+export const findIndexForBasic = (matrix, level, basic) => {
+  if (!matrix[level]) return 1;
   
-  const entries = Object.entries(payMatrix[level]);
+  const entries = Object.entries(matrix[level]);
   for (const [index, value] of entries) {
-    if (value === basic) return parseInt(index);
+    if (Number(value) === Number(basic)) return parseInt(index);
   }
   
   // Default to 1 if not found
@@ -61,11 +61,11 @@ export const findIndexForBasic = (payMatrix, level, basic) => {
 };
 
 // Get next basic pay based on level and index
-export const getNextBasicPay = (payMatrix, level, index) => {
-  if (!payMatrix[level]) return null;
+export const getNextBasicPay = (matrix, level, index) => {
+  if (!matrix[level]) return null;
   
   // If we've reached the max index, stay at that pay
-  if (index > 40) return payMatrix[level][40];
+  if (index > 40) return matrix[level][40];
   
-  return payMatrix[level][index] || payMatrix[level][40]; // Fallback to max if not found
+  return matrix[level][index] || matrix[level][40]; // Fallback to max if not found
 };

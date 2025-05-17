@@ -4,6 +4,9 @@ import { LineChart, Line, BarChart, Bar, XAxis, YAxis, CartesianGrid, Tooltip, L
 
 const ResultsCharts = ({ results, timeline }) => {
   if (!results || !timeline || timeline.length === 0) return null;
+
+  // Filter to yearly data points for clarity
+  const yearlyData = timeline.filter((_, i) => i % 12 === 0);
   
   return (
     <div className="space-y-6">
@@ -13,7 +16,7 @@ const ResultsCharts = ({ results, timeline }) => {
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
-              data={timeline.filter((_, i) => i % 12 === 0)} // Yearly data points for clarity
+              data={yearlyData}
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
@@ -34,7 +37,7 @@ const ResultsCharts = ({ results, timeline }) => {
         <div className="h-80">
           <ResponsiveContainer width="100%" height="100%">
             <LineChart
-              data={timeline.filter((_, i) => i % 12 === 0)} // Yearly data points
+              data={yearlyData}
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
               <CartesianGrid strokeDasharray="3 3" />
@@ -62,9 +65,21 @@ const ResultsCharts = ({ results, timeline }) => {
           <ResponsiveContainer width="100%" height="100%">
             <BarChart
               data={[
-                { name: 'Monthly Pension (Initial)', NPS: results.nps.monthlyPension, UPS: results.ups.monthlyPension },
-                { name: 'Lump Sum Benefit', NPS: results.nps.lumpSum, UPS: results.ups.gratuity },
-                { name: '20-Year Value', NPS: results.npsTotalValue, UPS: results.upsTotalValue }
+                { 
+                  name: 'Monthly Pension (Initial)', 
+                  NPS: results.nps.monthlyPension, 
+                  UPS: results.ups.monthlyPension 
+                },
+                { 
+                  name: 'Lump Sum Benefit', 
+                  NPS: results.nps.lumpSum, 
+                  UPS: results.ups.gratuity 
+                },
+                { 
+                  name: '20-Year Value', 
+                  NPS: results.npsTotalValue, 
+                  UPS: results.upsTotalValue 
+                }
               ]}
               margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
             >
@@ -84,43 +99,45 @@ const ResultsCharts = ({ results, timeline }) => {
         </div>
       </div>
 
-      {/* UPS Pension Growth Chart */}
-      <div>
-        <h3 className="text-lg font-semibold mb-3">UPS Pension Growth with DA</h3>
-        <div className="h-80">
-          <ResponsiveContainer width="100%" height="100%">
-            <LineChart
-              data={results.ups.pensionGrowth.filter((_, i) => i % 2 === 0)} // Show yearly points for clarity
-              margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
-            >
-              <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey="year" />
-              <YAxis tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`} />
-              <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
-              <Legend />
-              <Line 
-                type="monotone" 
-                dataKey="pension" 
-                name="UPS Pension with DA Growth" 
-                stroke="#10B981" 
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-              <Line 
-                type="monotone" 
-                dataKey="fixed" 
-                name="NPS Fixed Pension" 
-                stroke="#3B82F6" 
-                strokeWidth={2}
-                dot={{ r: 3 }}
-              />
-            </LineChart>
-          </ResponsiveContainer>
+      {/* Show UPS Pension Growth only if eligible */}
+      {results.isUPSEligible && (
+        <div>
+          <h3 className="text-lg font-semibold mb-3">UPS Pension Growth with DA</h3>
+          <div className="h-80">
+            <ResponsiveContainer width="100%" height="100%">
+              <LineChart
+                data={yearlyData}
+                margin={{ top: 5, right: 30, left: 20, bottom: 5 }}
+              >
+                <CartesianGrid strokeDasharray="3 3" />
+                <XAxis dataKey="year" />
+                <YAxis tickFormatter={(value) => `₹${(value/1000).toFixed(0)}k`} />
+                <Tooltip formatter={(value) => `₹${value.toLocaleString()}`} />
+                <Legend />
+                <Line 
+                  type="monotone" 
+                  dataKey="upsPension" 
+                  name="UPS Pension with DA Growth" 
+                  stroke="#10B981" 
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+                <Line 
+                  type="monotone" 
+                  dataKey="npsPension" 
+                  name="NPS Fixed Pension" 
+                  stroke="#3B82F6" 
+                  strokeWidth={2}
+                  dot={{ r: 3 }}
+                />
+              </LineChart>
+            </ResponsiveContainer>
+          </div>
+          <div className="mt-2 text-sm text-gray-500 text-center">
+            Shows how UPS pension increases over time with DA adjustments, while NPS pension remains fixed
+          </div>
         </div>
-        <div className="mt-2 text-sm text-gray-500 text-center">
-          Shows how UPS pension increases over time with DA adjustments, while NPS pension remains fixed
-        </div>
-      </div>
+      )}
     </div>
   );
 };

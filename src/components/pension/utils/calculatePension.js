@@ -1,139 +1,116 @@
 // src/components/pension/utils/calculatePension.js
-import { findIndexForBasic, getNextBasicPay } from './payMatrixUtils';
-import { calculateNPSBenefits } from './npsCalculations';
-import { calculateUPSBenefits } from './upsCalculations';
 
-export const calculatePension = (
-  formData, 
-  promotions, 
-  payMatrix, 
-  setTimeline, 
-  setError, 
-  setLoading
-) => {
-  const timeline = [];
-  let error = null;
-  
+import { findIndexForBasic, getNextBasicPay } from './payMatrixUtils';
+
+export const calculatePension = (formData, promotions, payMatrix) => {
   try {
     // Parse input data
+    const today = new Date();
     const currentLevel = parseInt(formData.payLevel);
     const currentBasic = parseInt(formData.currentBasic);
-    const currentDA = parseFloat(formData.currentDA) / 100; // Convert to decimal
+    const currentDA = parseFloat(formData.currentDA) / 100;
     const incrementMonth = formData.incrementMonth;
     const joiningDate = new Date(formData.dateOfJoining);
     const retirementDate = new Date(formData.retirementDate);
     const initialNPSCorpus = parseFloat(formData.currentNPSCorpus) || 0;
-    const fitmentFactor = 2.0; // CPC Fitment Factor
-    
+
+    // Set simulation start date based on currentNPSCorpus
+    const simulationStartDate = initialNPSCorpus > 0 ? today : joiningDate;
+
     // Validate dates
-    if (retirementDate <= joiningDate) {
-      return { error: 'Retirement date must be after joining date' };
+    if (retirementDate <= simulationStartDate) {
+      return { error: 'Retirement date must be after start date' };
     }
-    
+
     // Calculate service period
-    const totalMonthsOfService = Math.round((retirementDate - joiningDate) / (30 * 24 * 60 * 60 * 1000));
+    const totalMonthsOfService = Math.round((retirementDate - simulationStartDate) / (30 * 24 * 60 * 60 * 1000));
     const completedHalfYears = Math.floor(totalMonthsOfService / 6);
     const totalServiceYears = totalMonthsOfService / 12;
-    
+
     // Check UPS eligibility (minimum 10 years)
     const isUPSEligible = totalServiceYears >= 10;
-    
-    // Sort promotions by date
-    const sortedPromotions = [...promotions]
-      .filter(p => p.date && p.newLevel && p.newBasic)
+
+    // Sort and filter promotions
+    const validPromotions = promotions
+      .filter(p => p.date && p.newLevel && p.newBasic && new Date(p.date) >= simulationStartDate)
       .sort((a, b) => new Date(a.date) - new Date(b.date));
-    
-    // Set starting values FROM DATE OF JOINING
-    let currentDate = new Date(joiningDate);
+
+    let timeline = [];
+    let currentDate = new Date(simulationStartDate);
     let currentMonth = currentDate.getMonth();
     let currentYear = currentDate.getFullYear();
     let level = currentLevel;
     let basic = currentBasic;
     let index = findIndexForBasic(payMatrix, level, basic);
-    let da = currentDA; // Start with current DA
+    let da = currentDA;
     let npsCorpus = initialNPSCorpus;
-    
-    // Calculate next CPC year - Ensure we catch 2026, 2036, etc.
-    let nextCPCYear = Math.floor(currentYear / 10) * 10 + 6;
-    if (nextCPCYear <= currentYear) {
-      nextCPCYear += 10; // Move to next decade if current year is past this decade's CPC
-    }
-    
+
+    // Calculate next CPC year
+    let nextCPCYear = Math.ceil(currentYear / 10) * 10 + 6;
     const cpcEvents = [];
-    
+
     // Simulate month by month until retirement
-    while (new Date(currentYear, currentMonth) <= retirementDate) {
+    while (currentDate <= retirementDate) {
       // Check for promotions
-      const duePromotion = sortedPromotions.find(p => {
+      const duePromotion = validPromotions.find(p => {
         const promotionDate = new Date(p.date);
         return promotionDate.getFullYear() === currentYear && 
                promotionDate.getMonth() === currentMonth;
       });
-      
+
       if (duePromotion) {
+        const oldBasic = basic;
         level = parseInt(duePromotion.newLevel);
         basic = parseInt(duePromotion.newBasic);
-        index = findIndexForBasic(payMatrix, level, basic);
-        
-        // Validate pay protection rule (new basic >= current basic * 1.03)
-        if (basic < currentBasic * 1.03) {
-          return { error: `Promotion violates pay protection rule. New basic must be at least ₹${Math.ceil(currentBasic * 1.03)}` };
+
+        // Validate pay protection rule
+        if (basic < oldBasic * 1.03) {
+          return { 
+            error: `Promotion violates pay protection rule. New basic must be at least ₹${Math.ceil(oldBasic * 1.03)}` 
+          };
         }
+
+        index = findIndexForBasic(payMatrix, level, basic);
       }
-      
-      // Check for CPC implementation (January of CPC year)
+
+      // Check for CPC implementation
       if (currentMonth === 0 && currentYear === nextCPCYear) {
-        // Keep a record of pre-CPC values for reporting
         const preCPCBasic = basic;
-        
-        // Apply fitment factor to basic pay
-        basic = Math.round(basic * fitmentFactor);
-        
-        // Keep track of CPC events
+        basic = Math.round(basic * 2); // Fitment factor of 2.0
+        da = 0; // Reset DA to 0%
+
         cpcEvents.push({
           year: currentYear,
           oldBasic: preCPCBasic,
-          newBasic: basic,
-          fitmentFactor
+          newBasic: basic
         });
-        
-        // Reset DA to 0% after CPC
-        da = 0;
-        
-        // Calculate next CPC year
+
         nextCPCYear += 10;
       }
-      
-      // Check for annual increment (Jan or Jul based on user input)
+
+      // Check for annual increment
       if ((incrementMonth === 'Jan' && currentMonth === 0) || 
           (incrementMonth === 'Jul' && currentMonth === 6)) {
-        // Increment by moving to next index, but don't exceed 40
         if (index < 40) {
           index++;
+          basic = getNextBasicPay(payMatrix, level, index);
         }
-        basic = getNextBasicPay(payMatrix, level, index);
       }
-      
-      // Check for DA change (Jan and Jul) - Add 3 percentage points, not compound
+
+      // Check for DA change
       if (currentMonth === 0 || currentMonth === 6) {
-        // Increase DA by 3 percentage points
         da += 0.03;
       }
-      
+
       // Calculate monthly values
       const daAmount = Math.round(basic * da);
       const grossSalary = basic + daAmount;
-      
-      // Calculate NPS contribution (10% employee + 14% government)
       const npsContribution = grossSalary * 0.24;
+      const monthlyInterestRate = 0.08 / 12;
       
-      // Grow NPS corpus with monthly contribution and 8% annual return (compounded monthly)
-      // First add the contribution, then apply the interest
-      const monthlyInterestRate = 0.08 / 12; // Monthly equivalent of 8% annual
       npsCorpus += npsContribution;
       npsCorpus *= (1 + monthlyInterestRate);
-      
-      // Add to timeline
+
       timeline.push({
         date: new Date(currentYear, currentMonth).toISOString().slice(0, 7),
         year: currentYear,
@@ -147,34 +124,51 @@ export const calculatePension = (
         npsContribution,
         npsCorpus: Math.round(npsCorpus)
       });
-      
+
       // Move to next month
       currentMonth++;
       if (currentMonth > 11) {
         currentMonth = 0;
         currentYear++;
       }
+      currentDate = new Date(currentYear, currentMonth);
     }
+
+    // Calculate benefits
+    const finalNPSCorpus = Math.round(npsCorpus);
+    const npsLumpSum = Math.round(finalNPSCorpus * 0.6);
+    const npsAnnuityCorpus = Math.round(finalNPSCorpus * 0.4);
+    const annuityRate = 6.5;
+    const npsMonthlyPension = Math.round((npsAnnuityCorpus * (annuityRate / 100)) / 12);
+
+    const lastTenMonths = timeline.slice(-10);
+    const avgEmoluments = lastTenMonths.reduce((sum, month) => 
+      sum + (month.basic * (1 + (month.daPercent / 100))), 0) / lastTenMonths.length;
     
-    // Calculate NPS and UPS benefits
-    const npsBenefits = calculateNPSBenefits(npsCorpus);
-    const upsBenefits = calculateUPSBenefits(
-      timeline, 
-      completedHalfYears, 
-      isUPSEligible, 
-      npsBenefits.monthlyPension
-    );
-    
-    // Calculate total values
-    const npsTotalValue = npsBenefits.lumpSum + (npsBenefits.monthlyPension * 12 * 20); // 20 years
-    const upsTotalValue = upsBenefits.gratuity + (upsBenefits.avgPensionWith20YearDA * 12 * 20); // 20 years
+    const upsMonthlyPension = isUPSEligible ? Math.round(avgEmoluments * 0.5) : 0;
     
     const lastSalary = timeline[timeline.length - 1];
-    
-    // Prepare results
+    const gratuityBase = lastSalary.basic * (1 + (lastSalary.daPercent / 100));
+    let gratuity = Math.round(gratuityBase * 0.10 * completedHalfYears);
+    gratuity = Math.min(gratuity, 2000000);
+
+    const npsTotalValue = npsLumpSum + (npsMonthlyPension * 12 * 20);
+    const upsTotalValue = gratuity + (upsMonthlyPension * 12 * 20);
+
     const results = {
-      nps: npsBenefits,
-      ups: upsBenefits,
+      nps: {
+        corpus: finalNPSCorpus,
+        lumpSum: npsLumpSum,
+        annuityCorpus: npsAnnuityCorpus,
+        monthlyPension: npsMonthlyPension,
+        annuityRate
+      },
+      ups: {
+        avgBasic: Math.round(avgEmoluments),
+        monthlyPension: upsMonthlyPension,
+        gratuity,
+        avgPensionWith20YearDA: upsMonthlyPension
+      },
       serviceYears: Math.round(totalServiceYears),
       completedHalfYears,
       retirementBasic: lastSalary.basic,
@@ -185,10 +179,12 @@ export const calculatePension = (
       npsTotalValue,
       upsTotalValue
     };
-    
+
     return { results, timeline };
   } catch (error) {
     console.error("Calculation error:", error);
-    return { error: "An error occurred during calculation. Please check your inputs and try again." };
+    return { 
+      error: "An error occurred during calculation. Please check your inputs and try again." 
+    };
   }
 };
