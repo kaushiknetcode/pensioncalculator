@@ -1,4 +1,5 @@
-import PensionCalculator from './PensionCalculator'
+// src/App.jsx
+import PensionCalculator from './components/pension/PensionCalculator'
 
 function App() {
   return (
