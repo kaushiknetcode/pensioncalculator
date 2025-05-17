@@ -23,40 +23,55 @@ const PensionCalculator = () => {
   const [promotions, setPromotions] = useState([]);
 
   // Effect to load and process the pay matrix
-  useEffect(() => {
-    const loadPayMatrix = async () => {
-      try {
-        const response = await window.fs.readFile('/cpc.xlsx');
-        const workbook = XLSX.read(response, { type: 'binary' });
-        const worksheet = workbook.Sheets[workbook.SheetNames[0]];
-        const data = XLSX.utils.sheet_to_json(worksheet);
-        
-        // Process into structured format
-        const matrix = {};
-        for (let i = 1; i <= 18; i++) {
-          matrix[i] = {};
-          for (let j = 1; j <= 40; j++) {
-            const value = data[j - 1]?.[`Pay Level ${i}`];
-            if (value) matrix[i][j] = value;
-          }
+useEffect(() => {
+  const loadPayMatrix = async () => {
+    try {
+      // Add error handling and logging
+      console.log("Starting to load pay matrix...");
+      const response = await fetch('/cpc.xlsx');
+      const arrayBuffer = await response.arrayBuffer();
+      console.log("File loaded, processing...");
+      
+      const workbook = XLSX.read(new Uint8Array(arrayBuffer), { type: 'array' });
+      const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+      const data = XLSX.utils.sheet_to_json(worksheet);
+      
+      console.log("Parsed data:", data); // To see what we're getting
+      
+      // Process into structured format
+      const matrix = {};
+      for (let i = 1; i <= 18; i++) {
+        matrix[i] = {};
+        for (let j = 1; j <= 40; j++) {
+          const value = data[j - 1]?.[`Pay Level ${i}`];
+          if (value) matrix[i][j] = value;
         }
-        setPayMatrix(matrix);
-      } catch (error) {
-        console.error("Error loading pay matrix:", error);
       }
-    };
-    loadPayMatrix();
-  }, []);
-
-  // Update basic pay options when level changes
-  useEffect(() => {
-    if (formData.payLevel && payMatrix[formData.payLevel]) {
-      const options = Object.values(payMatrix[formData.payLevel])
-        .filter(Boolean)
-        .sort((a, b) => a - b);
-      setBasicPayOptions(options);
+      
+      console.log("Processed matrix:", matrix); // To see the final structure
+      setPayMatrix(matrix);
+    } catch (error) {
+      console.error("Error loading pay matrix:", error);
     }
-  }, [formData.payLevel, payMatrix]);
+  };
+  
+  loadPayMatrix();
+}, []);
+
+// Update basic pay options when level changes
+useEffect(() => {
+  if (formData.payLevel && payMatrix[formData.payLevel]) {
+    console.log("Updating basic pay options for level:", formData.payLevel);
+    console.log("Available values:", payMatrix[formData.payLevel]);
+    
+    const options = Object.values(payMatrix[formData.payLevel])
+      .filter(Boolean)
+      .sort((a, b) => a - b);
+    
+    console.log("Sorted options:", options);
+    setBasicPayOptions(options);
+  }
+}, [formData.payLevel, payMatrix]);
 
   // Handle adding a promotion
   const addPromotion = () => {
