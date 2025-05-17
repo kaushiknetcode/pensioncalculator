@@ -26,7 +26,7 @@ const PensionCalculator = () => {
   useEffect(() => {
     const loadPayMatrix = async () => {
       try {
-        const response = await window.fs.readFile('7thPayMatrixTableExcelDownload.xlsx');
+        const response = await window.fs.readFile('/cpc.xlsx');
         const workbook = XLSX.read(response, { type: 'binary' });
         const worksheet = workbook.Sheets[workbook.SheetNames[0]];
         const data = XLSX.utils.sheet_to_json(worksheet);
